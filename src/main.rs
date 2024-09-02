@@ -1,8 +1,9 @@
 mod txt_generator;
-
+mod domain_status;
 pub use txt_generator::generate_txt_record;
 mod record_verification;
 pub use record_verification::verify_txt_record;
+pub use domain_status::query_domain_status;
 
 use actix_web::{web, App, HttpServer, middleware};
 use sqlx::postgres::PgPoolOptions;
@@ -12,7 +13,6 @@ use actix_governor::{Governor, GovernorConfigBuilder};
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    
     dotenv().ok();
 
     // Get database URL from environment variable
@@ -25,7 +25,10 @@ async fn main() -> std::io::Result<()> {
         .await
         .expect("Failed to create pool");
 
+    // Run pending migrations
+    sqlx::migrate!().run(&pool).await.expect("Failed to run migrations");
     
+
     println!("Starting server at http://127.0.0.1:8080");
 
     // rate limiter
@@ -35,7 +38,6 @@ async fn main() -> std::io::Result<()> {
         .finish()
         .unwrap();
 
-
     HttpServer::new(move || {
         App::new()
             .wrap(middleware::Logger::default())
@@ -43,6 +45,7 @@ async fn main() -> std::io::Result<()> {
             .app_data(web::Data::new(pool.clone()))
             .route("/generate_txt_record", web::post().to(generate_txt_record))
             .route("/verify_txt_record", web::post().to(verify_txt_record))
+            .route("/domain_status", web::get().to(query_domain_status))
             .route("/", web::get().to(|| async { "Welcome to the DNS TXT Record Service" }))
     })
     .bind("127.0.0.1:8080")?
