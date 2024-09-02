@@ -1,0 +1,13 @@
+[package]
+name = "dnstest"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ksuid = "0.2.0"
+hickory-resolver = "0.24.0"
+actix-web = "4.9.0"
+postgres = "0.19.8"
+sqlx = { version = "0.8", features = ["runtime-tokio-rustls","postgres"] }
+serde = "1.0.209"
+dotenv = "0.14.1"
