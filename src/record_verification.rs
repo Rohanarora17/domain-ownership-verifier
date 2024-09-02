@@ -1,9 +1,10 @@
 use actix_web::{web, HttpResponse, Responder};
-use hickory_resolver::config::*;
 use serde::{Deserialize, Serialize};
 use sqlx::{Pool, Postgres};
-use hickory_resolver::TokioAsyncResolver;
-use tokio::runtime::Handle;
+use std::net::*;
+use async_std::prelude::*;
+use async_std_resolver::{resolver, config};
+
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct VerificationRequest {
@@ -12,19 +13,18 @@ pub struct VerificationRequest {
 }
 
 async fn lookup_txt_record(domain: &str) -> Result<Vec<String>, String> {
-    // Create a resolver with the default configuration
-    let resolver = TokioAsyncResolver::new(
-        ResolverConfig::default(),
-        ResolverOpts::default(),
-        Handle::current()
-    )
-    .map_err(|e| format!("Failed to create resolver: {}", e))?;
     
-    // Perform the lookup for TXT records
+    let resolver = resolver(
+        config::ResolverConfig::default(),
+        config::ResolverOpts::default(),
+      ).await;
+    
+    
+    // txt lookup
     let response = resolver.txt_lookup(domain).await
         .map_err(|e| format!("TXT record lookup failed: {}", e))?;
     
-    // Extract and collect all the TXT records
+    
     let records: Vec<String> = response.iter()
         .flat_map(|rdata| rdata.txt_data().iter().map(|b| String::from_utf8_lossy(b).to_string()))
         .collect();
@@ -64,11 +64,12 @@ pub async fn verify_txt_record(
         user_id,
         domain
     )
-    .fetch_one(db_pool.get_ref())
+    .fetch_optional(db_pool.get_ref())
     .await
     {
-        Ok(record) => record.record,
-        Err(_) => return HttpResponse::NotFound().json("Record not found or already verified"),
+        Ok(Some(record)) => record.record,
+        Ok(None) => return HttpResponse::NotFound().json("Record not found or already verified"),
+        Err(e) => return HttpResponse::InternalServerError().body(format!("Database error: {}", e)),
     };
 
     // Lookup the TXT records for the domain

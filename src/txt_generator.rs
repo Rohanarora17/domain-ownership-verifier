@@ -81,39 +81,79 @@ pub async fn generate_txt_record(
         return HttpResponse::BadRequest().json("Domain is empty");
     }
 
-    let txt_record_attribute_suffix = "_verification";
-
-    let mut txt_config = TxtRecordGenerator {
-        domain: domain.to_string(),
-        record_attribute: format!("{}_{}", domain.replace(".", "_"), txt_record_attribute_suffix),
-        record_attribute_value: generate_ksuid(),
-    };
-
-    match generate_txt_record_from_config(&mut txt_config) {
-        Ok(dns_record) => {
-            // Store the record in the database
-            match sqlx::query!(
-                "INSERT INTO txt_records (user_id, domain, record, is_verified) VALUES ($1, $2, $3, $4)",
-                user_id,
-                dns_record.domain,
-                dns_record.record,
-                false
-            )
-            .execute(db_pool.get_ref())
-            .await
-            {
-                Ok(_) => {
-                    let response = TxtRecordResponse {
-                        user_id: user_id.to_string(),
-                        dns_record,
-                    };
-                    HttpResponse::Ok().json(response)
-                }
-                Err(e) => HttpResponse::InternalServerError().body(format!("Database error: {}", e)),
+    // Check if a verification code already exists for this user_id and domain
+    match sqlx::query!(
+        "SELECT record, is_verified FROM txt_records WHERE user_id = $1 AND domain = $2",
+        user_id,
+        domain
+    )
+    .fetch_optional(db_pool.get_ref())
+    .await
+    {
+        Ok(Some(existing_record)) => {
+            if existing_record.is_verified {
+                // If the user is already verified, return a message
+                return HttpResponse::Ok().json("This domain onwnership is already verified");
+            } else {
+                // If a record exists but not verified, return the existing verification code
+                let dns_record = DnsRecordInstruction {
+                    domain: domain.to_string(),
+                    record: existing_record.record.clone(),
+                    action: format!(
+                        "Use existing TXT record for the domain {} with the content {}",
+                        domain, existing_record.record.clone()
+                    ),
+                };
+                let response = TxtRecordResponse {
+                    user_id: user_id.to_string(),
+                    dns_record,
+                };
+                return HttpResponse::Ok().json(response);
             }
         }
-        Err(e) => HttpResponse::InternalServerError().body(e),
+        Ok(None) => {
+            // If no record exists, proceed to generate a new one
+            println!("No record exists, proceeding to generate a new one");
+            let txt_record_attribute_suffix = "_verification";
+
+            let mut txt_config = TxtRecordGenerator {
+                domain: domain.to_string(),
+                record_attribute: format!("{}_{}", domain.replace(".", "_"), txt_record_attribute_suffix),
+                record_attribute_value: generate_ksuid(),
+            };
+
+            match generate_txt_record_from_config(&mut txt_config) {
+                Ok(dns_record) => {
+                    // Store the new record in the database
+                    match sqlx::query!(
+                        "INSERT INTO txt_records (user_id, domain, record, is_verified) VALUES ($1, $2, $3, $4)",
+                        user_id,
+                        dns_record.domain,
+                        dns_record.record,
+                        false
+                    )
+                    .execute(db_pool.get_ref())
+                    .await
+                    {
+                        Ok(_) => {
+                            let response = TxtRecordResponse {
+                                user_id: user_id.to_string(),
+                                dns_record,
+                            };
+                            HttpResponse::Ok().json(response)
+                        }
+                        Err(e) => HttpResponse::InternalServerError().body(format!("Database error: {}", e)),
+                    }
+                }
+                Err(e) => HttpResponse::InternalServerError().body(e),
+            }
+            
+
+        }
+        Err(e) => return HttpResponse::InternalServerError().body(format!("Database error: {}", e)),
     }
+
+    
 }
 
 
