@@ -18,13 +18,13 @@ A Rust-based web service for generating and verifying DNS TXT records. This serv
 
 1. Clone the repository:
    ```
-   git clone https://github.com/yourusername/dns-record-verification.git
-   cd dns-record-verification
+   git clone https://github.com/rohanarora17/domain-ownership-verifier.git
+   cd domain-ownership-verifier
    ```
 
 2. Set up the database:
    ```
-   psql -c "CREATE DATABASE dns_verification"
+   psql -c "CREATE DATABASE domain_ownership_verifier"
    sqlx database create
    sqlx migrate run
    ```
