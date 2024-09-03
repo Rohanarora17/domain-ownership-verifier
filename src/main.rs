@@ -28,6 +28,7 @@ use actix_governor::{Governor, GovernorConfigBuilder};
 ///
 /// Returns a Result which is Ok if the server runs successfully, or an Err
 /// if there's an error during setup or execution.
+
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     // Load environment variables from .env file
@@ -46,7 +47,7 @@ async fn main() -> std::io::Result<()> {
     // Run pending migrations
     sqlx::migrate!().run(&pool).await.expect("Failed to run migrations");
     
-    println!("Starting server at http://127.0.0.1:8080");
+    println!("Starting server...");
 
     // Configure rate limiter
     let governor_conf = GovernorConfigBuilder::default()
@@ -55,6 +56,12 @@ async fn main() -> std::io::Result<()> {
         .finish()
         .unwrap();
 
+    // Get the host and port from environment variables or use defaults
+    let host = env::var("HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
+    let port = env::var("PORT").unwrap_or_else(|_| "8080".to_string());
+    let bind_address = format!("{}:{}", host, port);
+
+    println!("Starting server at http://{}", bind_address);
 
     // Set up and run the HTTP server
     HttpServer::new(move || {
@@ -67,7 +74,9 @@ async fn main() -> std::io::Result<()> {
             .route("/domain_status", web::get().to(query_domain_status))
             .route("/", web::get().to(|| async { "Welcome to the DNS TXT Record Service" }))
     })
-    .bind("127.0.0.1:8080")?
+    .bind(&bind_address)?
     .run()
     .await
+
+    
 }
