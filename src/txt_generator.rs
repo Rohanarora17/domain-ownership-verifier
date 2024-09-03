@@ -1,35 +1,59 @@
+//! Module for generating DNS TXT records for domain ownership verification.
+//!
+//! This module provides functionality to generate and manage TXT records
+//! for domain ownership verification purposes.
+
 use actix_web::{web, App, HttpResponse, HttpServer, Responder};
 use serde::{Deserialize, Serialize};
 use sqlx::{postgres::PgPoolOptions, Pool, Postgres};
 use ksuid::Ksuid;
 
+/// Represents the configuration for generating a TXT record.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TxtRecordGenerator {
+    /// The domain for which the TXT record is being generated.
     domain: String,
+    /// The attribute name for the TXT record.
     record_attribute: String,
+    /// The value for the TXT record attribute.
     record_attribute_value: String,
 }
 
+/// Represents the instruction for creating a DNS record.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DnsRecordInstruction {
+    /// The domain for which the DNS record is to be created.
     pub domain: String,
+    /// The content of the DNS record.
     pub record: String,
+    /// A human-readable description of the action to be taken.
     pub action: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+/// Represents a user's request for generating a TXT record.
+#[derive(Debug, Serialize, Deserialize)]      
 pub struct UserRequest {
+    /// The ID of the user making the request.
     user_id: String,
+    /// The domain for which the TXT record is requested.
     domain: String,
 }
 
+/// Represents the response to a TXT record generation request.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TxtRecordResponse {
+    /// The ID of the user who made the request.
     user_id: String,
+    /// The DNS record instruction generated.
     dns_record: DnsRecordInstruction,
 }
 
 impl TxtRecordGenerator {
+    /// Validates the TXT record configuration.
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(())` if the configuration is valid, or an `Err` with a description of the error.
     fn validate(&self) -> Result<(), String> {
         if self.domain.trim().is_empty() {
             return Err("Domain is empty".to_string());
@@ -47,10 +71,25 @@ impl TxtRecordGenerator {
     }
 }
 
+/// Generates a new KSUID (K-Sortable Unique IDentifier).
+///
+/// # Returns
+///
+/// Returns a String representation of the generated KSUID.
 fn generate_ksuid() -> String {
     Ksuid::generate().to_base62()
 }
 
+/// Generates a DNS record instruction from the provided configuration.
+///
+/// # Arguments
+///
+/// * `config` - A mutable reference to a `TxtRecordGenerator` configuration.
+///
+/// # Returns
+///
+/// Returns a `Result` containing either a `DnsRecordInstruction` if successful,
+/// or a `String` describing the error if unsuccessful.
 fn generate_txt_record_from_config(
     config: &mut TxtRecordGenerator,
 ) -> Result<DnsRecordInstruction, String> {
@@ -70,6 +109,22 @@ fn generate_txt_record_from_config(
     Ok(instruction)
 }
 
+/// Handles the generation of a TXT record for domain ownership verification.
+///
+/// This function checks if a verification record already exists for the given user and domain.
+/// If it does and is verified, it returns a message indicating that.
+/// If it exists but is not verified, it returns the existing record.
+/// If no record exists, it generates a new one and stores it in the database.
+///
+/// # Arguments
+///
+/// * `user_request` - A JSON payload containing the user's request.
+/// * `db_pool` - A connection pool for the database.
+///
+/// # Returns
+///
+/// Returns an implementation of `Responder`, which will be a JSON response
+/// containing either the generated TXT record or an error message.
 pub async fn generate_txt_record(
     user_request: web::Json<UserRequest>,
     db_pool: web::Data<Pool<Postgres>>,
@@ -155,5 +210,3 @@ pub async fn generate_txt_record(
 
     
 }
-
-

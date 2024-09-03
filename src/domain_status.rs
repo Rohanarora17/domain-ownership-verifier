@@ -1,19 +1,39 @@
+//! Domain status module for querying the verification status of a domain.
+
 use actix_web::{web, HttpResponse, Responder};
 use serde::{Deserialize, Serialize};
-use sqlx::{postgres::PgPoolOptions, Pool, Postgres};
-
+use sqlx::{Pool, Postgres};
+/// Represents a query for domain status.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DomainStatusQuery {
+    /// The ID of the user querying the domain status.
     pub user_id: String,
+    /// The domain being queried.
     pub domain: String,
 }
 
+/// Represents the response for a domain status query.
 #[derive(Debug, Serialize, Deserialize)]
-
 pub struct DomainStatusResponse {
+    /// The status of the domain ownership verification.
     status: String
 }
 
+/// Queries the status of domain ownership verification.
+///
+/// This function checks the database for the verification status of a given domain
+/// for a specific user. It returns a JSON response indicating whether the domain
+/// ownership is verified, pending verification, or not found.
+///
+/// # Arguments
+///
+/// * `query` - A web::Query containing the user ID and domain to check.
+/// * `db_pool` - A connection pool for the database.
+///
+/// # Returns
+///
+/// An implementation of Responder, which will be a JSON response containing
+/// the status of the domain ownership verification.
 pub async fn query_domain_status(
     query: web::Query<DomainStatusQuery>,
     db_pool: web::Data<Pool<Postgres>>,
